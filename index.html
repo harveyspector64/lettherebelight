@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Let There Be Light</title>
+    <title>Night Sky Creator</title>
     <style>
         body {
             display: flex;
@@ -24,13 +24,17 @@
             top: 20px;
             left: 20px;
             font-size: 18px;
+            opacity: 1;
+            transition: opacity 1s;
+        }
+        .instructions.fade {
+            opacity: 0;
         }
     </style>
 </head>
 <body>
     <div class="instructions">
-        Click to add stars to the night sky.<br>
-        Click and drag to create land and water.
+        Click to add stars to the night sky.
     </div>
     <canvas id="gameCanvas"></canvas>
     
@@ -45,7 +49,8 @@
 
         // Game state variables
         let stars = [];
-        let landWaterMap = [];
+        let objects = [];
+        let isNight = true;
 
         // Utility functions
         function getRandomInt(min, max) {
@@ -78,40 +83,24 @@
 
         // Handle mouse click event to add stars
         canvas.addEventListener('click', (event) => {
+            if (!isNight) return;
+
             const rect = canvas.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
             stars.push(createStar(x, y));
-        });
 
-        // Brush tool functionality for land and water creation
-        let isDrawing = false;
-        let brushSize = 10;
-
-        canvas.addEventListener('mousedown', () => {
-            isDrawing = true;
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDrawing = false;
-        });
-
-        canvas.addEventListener('mousemove', (event) => {
-            if (!isDrawing) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            for (let i = -brushSize; i <= brushSize; i++) {
-                for (let j = -brushSize; j <= brushSize; j++) {
-                    if (i * i + j * j <= brushSize * brushSize) {
-                        const mapX = Math.floor(x + i);
-                        const mapY = Math.floor(y + j);
-                        landWaterMap[mapY] = landWaterMap[mapY] || [];
-                        landWaterMap[mapY][mapX] = 1;
-                    }
-                }
+            // Check star count and add objects
+            if (stars.length === 10) {
+                objects.push({ type: 'plane', x: -100, y: 100 });
+            } else if (stars.length === 20) {
+                objects.push({ type: 'satellite', x: -100, y: 200 });
+            } else if (stars.length === 30) {
+                objects.push({ type: 'ufo', x: -100, y: 150 });
+            } else if (stars.length === 50) {
+                objects.push({ type: 'moon', x: canvas.width / 2, y: canvas.height / 4, radius: 50 });
+            } else if (stars.length === 100) {
+                isNight = false;
             }
         });
 
@@ -125,29 +114,56 @@
                     star.flickerTimer = 0;
                 }
             });
+
+            objects.forEach((object) => {
+                if (object.type === 'plane' || object.type === 'satellite' || object.type === 'ufo') {
+                    object.x += deltaTime * 0.1;
+                    if (object.x > canvas.width) {
+                        objects = objects.filter((obj) => obj !== object);
+                    }
+                }
+            });
         }
 
         function render() {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (isNight) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Render stars
-            stars.forEach((star) => {
-                ctx.fillStyle = star.color;
-                ctx.globalAlpha = star.opacity;
-                ctx.fillRect(star.x, star.y, star.size, star.size);
-                ctx.globalAlpha = 1;
-            });
+                // Render stars
+                stars.forEach((star) => {
+                    ctx.fillStyle = star.color;
+                    ctx.globalAlpha = star.opacity;
+                    ctx.fillRect(star.x, star.y, star.size, star.size);
+                    ctx.globalAlpha = 1;
+                });
 
-            // Render land and water
-            landWaterMap.forEach((row, y) => {
-                row.forEach((cell, x) => {
-                    if (cell === 1) {
-                        ctx.fillStyle = '#8B4513';
-                        ctx.fillRect(x, y, 1, 1);
+                // Render objects
+                objects.forEach((object) => {
+                    if (object.type === 'plane') {
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(object.x, object.y, 50, 10);
+                    } else if (object.type === 'satellite') {
+                        ctx.fillStyle = '#ccc';
+                        ctx.fillRect(object.x, object.y, 30, 30);
+                    } else if (object.type === 'ufo') {
+                        ctx.fillStyle = '#0f0';
+                        ctx.beginPath();
+                        ctx.arc(object.x, object.y, 20, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (object.type === 'moon') {
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(object.x, object.y, object.radius, 0, Math.PI * 2);
+                        ctx.fill();
                     }
                 });
-            });
+            } else {
+                // Daytime scene
+                ctx.fillStyle = '#87ceeb';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Add particles for clouds
+            }
         }
 
         let lastTime = 0;
@@ -161,6 +177,12 @@
 
             requestAnimationFrame(gameLoop);
         }
+
+        // Fade out instructions after a delay
+        setTimeout(() => {
+            const instructions = document.querySelector('.instructions');
+            instructions.classList.add('fade');
+        }, 3000);
 
         gameLoop(0);
     </script>
