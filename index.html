@@ -111,9 +111,9 @@
                 stars.push(createStar(x, y));
 
                 // Check star count and add objects
-                if (stars.length === 50) {
+                if (stars.length === 50 && !objects.some(obj => obj.type === 'plane')) {
                     objects.push({ type: 'plane', x: -100, y: getRandomInt(50, 200), direction: 'right', delay: 0, blinkTimer: 0, blinkOn: false });
-                } else if (stars.length === 200) {
+                } else if (stars.length === 200 && !objects.some(obj => obj.type === 'satellite')) {
                     objects.push({ type: 'satellite', x: -100, y: getRandomInt(50, 200), direction: 'right' });
                 } else if (stars.length === 500) {
                     isTransitioning = true;
@@ -160,7 +160,7 @@
                     }
 
                     object.delay -= deltaTime;
-                    if (object.delay <= 0 && !objects.some((obj) => obj.type === 'plane' && obj !== object)) {
+                    if (object.delay <= 0) {
                         const newPlane = {
                             type: 'plane',
                             x: object.direction === 'right' ? -100 : canvas.width,
@@ -171,6 +171,7 @@
                             blinkOn: false,
                         };
                         objects.push(newPlane);
+                        object.delay = getRandomInt(1000, 5000);
                     }
                 } else if (object.type === 'satellite') {
                     object.x += deltaTime * 0.1;
