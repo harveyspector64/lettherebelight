@@ -19,7 +19,7 @@
         canvas {
             border: 1px solid #fff;
         }
-        .instructions {
+        .info {
             position: absolute;
             top: 20px;
             left: 20px;
@@ -27,30 +27,37 @@
             opacity: 1;
             transition: opacity 1s;
         }
-        .instructions.fade {
+        .info.fade {
             opacity: 0;
+        }
+        .version {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 18px;
         }
     </style>
 </head>
 <body>
-    <div class="instructions">
+    <div class="info">
         Click to add stars to the night sky.
     </div>
+    <div class="version">Version 1.2</div>
     <canvas id="gameCanvas"></canvas>
-    <canvas id="starCanvas" style="display: none;"></canvas>
+    <canvas id="starFieldCanvas" style="display: none;"></canvas>
     
     <script>
         // Get the canvas elements and 2D rendering contexts
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const starCanvas = document.getElementById('starCanvas');
-        const starCtx = starCanvas.getContext('2d');
+        const starFieldCanvas = document.getElementById('starFieldCanvas');
+        const starFieldCtx = starFieldCanvas.getContext('2d');
 
         // Set the canvas size to fill the window
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        starCanvas.width = window.innerWidth;
-        starCanvas.height = window.innerHeight;
+        starFieldCanvas.width = window.innerWidth;
+        starFieldCanvas.height = window.innerHeight;
 
         // Game state variables
         let stars = [];
@@ -75,21 +82,29 @@
             return colors[getRandomInt(0, colors.length - 1)];
         }
 
+        // Star field creation
+        function createStarField() {
+            starFieldCtx.fillStyle = '#000';
+            starFieldCtx.fillRect(0, 0, starFieldCanvas.width, starFieldCanvas.height);
+
+            for (let i = 0; i < 1000; i++) {
+                const x = Math.random() * starFieldCanvas.width;
+                const y = Math.random() * starFieldCanvas.height;
+                const size = Math.random() * 2;
+                const color = getRandomStarColor();
+
+                starFieldCtx.fillStyle = color;
+                starFieldCtx.fillRect(x, y, size, size);
+            }
+        }
+
         // Star creation functionality
         function createStar(x, y) {
             const size = getRandomInt(1, 3);
             const color = getRandomStarColor();
-            const flickerInterval = getRandomInt(500, 2000);
 
-            return {
-                x,
-                y,
-                size,
-                color,
-                flickerInterval,
-                opacity: 1,
-                flickerTimer: 0,
-            };
+            starFieldCtx.fillStyle = color;
+            starFieldCtx.fillRect(x, y, size, size);
         }
 
         // Plane creation functionality
@@ -150,7 +165,7 @@
             const y = event.clientY - rect.top;
 
             if (isNight) {
-                stars.push(createStar(x, y));
+                createStar(x, y);
 
                 // Check star count and add objects
                 if (stars.length === 50 && !objects.some(obj => obj.type === 'plane')) {
@@ -160,6 +175,8 @@
                 } else if (stars.length === 500) {
                     isTransitioning = true;
                 }
+
+                stars.push({ x, y });
             } else {
                 for (let i = 0; i < 10; i++) {
                     const particleX = x + getRandomInt(-20, 20);
@@ -171,15 +188,6 @@
 
         // Game loop
         function update(deltaTime) {
-            stars.forEach((star) => {
-                star.flickerTimer += deltaTime;
-
-                if (star.flickerTimer >= star.flickerInterval) {
-                    star.opacity = star.opacity === 1 ? 0.5 : 1;
-                    star.flickerTimer = 0;
-                }
-            });
-
             objects.forEach((object, index) => {
                 if (object.type === 'plane') {
                     if (object.direction === 'right') {
@@ -267,17 +275,8 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             if (isNight) {
-                // Render stars on the off-screen canvas
-                starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
-                stars.forEach((star) => {
-                    starCtx.fillStyle = star.color;
-                    starCtx.globalAlpha = star.opacity;
-                    starCtx.fillRect(star.x, star.y, star.size, star.size);
-                    starCtx.globalAlpha = 1;
-                });
-
-                // Draw the off-screen canvas on the main canvas
-                ctx.drawImage(starCanvas, 0, 0);
+                // Draw the star field on the main canvas
+                ctx.drawImage(starFieldCanvas, 0, 0);
 
                 // Render objects
                 objects.forEach((object) => {
@@ -344,9 +343,12 @@
 
         // Fade out instructions after a delay
         setTimeout(() => {
-            const instructions = document.querySelector('.instructions');
-            instructions.classList.add('fade');
+            const info = document.querySelector('.info');
+            info.classList.add('fade');
         }, 3000);
+
+        // Create the initial star field
+        createStarField();
 
         gameLoop(0);
     </script>
