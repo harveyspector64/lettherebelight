@@ -37,15 +37,20 @@
         Click to add stars to the night sky.
     </div>
     <canvas id="gameCanvas"></canvas>
+    <canvas id="starCanvas" style="display: none;"></canvas>
     
     <script>
-        // Get the canvas element and 2D rendering context
+        // Get the canvas elements and 2D rendering contexts
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const starCanvas = document.getElementById('starCanvas');
+        const starCtx = starCanvas.getContext('2d');
 
         // Set the canvas size to fill the window
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        starCanvas.width = window.innerWidth;
+        starCanvas.height = window.innerHeight;
 
         // Game state variables
         let stars = [];
@@ -54,6 +59,11 @@
         let isTransitioning = false;
         let transitionProgress = 0;
         let cloudParticles = [];
+
+        // Object pool for planes, satellites, and cloud particles
+        let planePool = [];
+        let satellitePool = [];
+        let cloudPool = [];
 
         // Utility functions
         function getRandomInt(min, max) {
@@ -82,21 +92,53 @@
             };
         }
 
-        // Cloud particle creation functionality
-        function createCloudParticle(x, y) {
-            const size = getRandomInt(2, 6);
-            const opacity = Math.random() * 0.8 + 0.2;
-            const speedX = (Math.random() - 0.5) * 0.2;
-            const speedY = (Math.random() - 0.5) * 0.2;
-
-            return {
+        // Plane creation functionality
+        function createPlane(x, y, direction) {
+            const plane = planePool.length > 0 ? planePool.pop() : {
                 x,
                 y,
-                size,
-                opacity,
-                speedX,
-                speedY,
+                direction,
+                speed: getRandomInt(100, 200) / 1000,
+                size: getRandomInt(40, 60),
+                delay: getRandomInt(1000, 5000),
+                blinkTimer: 0,
+                blinkOn: false,
             };
+            plane.x = x;
+            plane.y = y;
+            plane.direction = direction;
+            plane.delay = getRandomInt(1000, 5000);
+            plane.blinkTimer = 0;
+            plane.blinkOn = false;
+            return plane;
+        }
+
+        // Satellite creation functionality
+        function createSatellite(x, y) {
+            const satellite = satellitePool.length > 0 ? satellitePool.pop() : {
+                x,
+                y,
+                speed: getRandomInt(50, 100) / 1000,
+                size: getRandomInt(20, 40),
+            };
+            satellite.x = x;
+            satellite.y = y;
+            return satellite;
+        }
+
+        // Cloud particle creation functionality
+        function createCloudParticle(x, y) {
+            const cloudParticle = cloudPool.length > 0 ? cloudPool.pop() : {
+                x,
+                y,
+                size: getRandomInt(2, 6),
+                opacity: Math.random() * 0.8 + 0.2,
+                speedX: (Math.random() - 0.5) * 0.2,
+                speedY: (Math.random() - 0.5) * 0.2,
+            };
+            cloudParticle.x = x;
+            cloudParticle.y = y;
+            return cloudParticle;
         }
 
         // Handle mouse click event to add stars or cloud particles
@@ -112,9 +154,9 @@
 
                 // Check star count and add objects
                 if (stars.length === 50 && !objects.some(obj => obj.type === 'plane')) {
-                    objects.push({ type: 'plane', x: -100, y: getRandomInt(50, 200), direction: 'right', delay: 0, blinkTimer: 0, blinkOn: false });
+                    objects.push({ type: 'plane', ...createPlane(-100, getRandomInt(50, 200), 'right') });
                 } else if (stars.length === 200 && !objects.some(obj => obj.type === 'satellite')) {
-                    objects.push({ type: 'satellite', x: -100, y: getRandomInt(50, 200), direction: 'right' });
+                    objects.push({ type: 'satellite', ...createSatellite(-100, getRandomInt(50, 200)) });
                 } else if (stars.length === 500) {
                     isTransitioning = true;
                 }
@@ -138,46 +180,37 @@
                 }
             });
 
-            objects.forEach((object) => {
+            objects.forEach((object, index) => {
                 if (object.type === 'plane') {
-                    const speed = 0.2;
                     if (object.direction === 'right') {
-                        object.x += deltaTime * speed;
+                        object.x += deltaTime * object.speed;
                         if (object.x > canvas.width) {
-                            object.x = -100;
-                            object.y = getRandomInt(50, 200);
-                            object.direction = Math.random() < 0.5 ? 'right' : 'left';
-                            object.delay = getRandomInt(1000, 5000);
+                            planePool.push(object);
+                            objects.splice(index, 1);
                         }
                     } else {
-                        object.x -= deltaTime * speed;
-                        if (object.x < -100) {
-                            object.x = canvas.width;
-                            object.y = getRandomInt(50, 200);
-                            object.direction = Math.random() < 0.5 ? 'right' : 'left';
-                            object.delay = getRandomInt(1000, 5000);
+                        object.x -= deltaTime * object.speed;
+                        if (object.x < -object.size) {
+                            planePool.push(object);
+                            objects.splice(index, 1);
                         }
                     }
 
                     object.delay -= deltaTime;
                     if (object.delay <= 0) {
-                        const newPlane = {
-                            type: 'plane',
-                            x: object.direction === 'right' ? -100 : canvas.width,
-                            y: getRandomInt(50, 200),
-                            direction: object.direction,
-                            delay: getRandomInt(1000, 5000),
-                            blinkTimer: 0,
-                            blinkOn: false,
-                        };
-                        objects.push(newPlane);
+                        const newPlane = createPlane(
+                            object.direction === 'right' ? -100 : canvas.width,
+                            getRandomInt(50, 200),
+                            object.direction
+                        );
+                        objects.push({ type: 'plane', ...newPlane });
                         object.delay = getRandomInt(1000, 5000);
                     }
                 } else if (object.type === 'satellite') {
-                    object.x += deltaTime * 0.1;
+                    object.x += deltaTime * object.speed;
                     if (object.x > canvas.width) {
-                        object.x = -100;
-                        object.y = getRandomInt(50, 200);
+                        satellitePool.push(object);
+                        objects.splice(index, 1);
                     }
                 }
             });
@@ -190,13 +223,14 @@
                 }
             }
 
-            cloudParticles.forEach((particle) => {
+            cloudParticles.forEach((particle, index) => {
                 particle.x += particle.speedX;
                 particle.y += particle.speedY;
                 particle.opacity -= 0.001;
 
                 if (particle.opacity <= 0) {
-                    cloudParticles = cloudParticles.filter((p) => p !== particle);
+                    cloudPool.push(particle);
+                    cloudParticles.splice(index, 1);
                 }
 
                 cloudParticles.forEach((otherParticle) => {
@@ -221,7 +255,8 @@
                             particle.size = newSize;
                             particle.x = (particle.x + otherParticle.x) / 2;
                             particle.y = (particle.y + otherParticle.y) / 2;
-                            cloudParticles = cloudParticles.filter((p) => p !== otherParticle);
+                            cloudPool.push(otherParticle);
+                            cloudParticles.splice(cloudParticles.indexOf(otherParticle), 1);
                         }
                     }
                 });
@@ -229,29 +264,32 @@
         }
 
         function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
             if (isNight) {
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // Render stars
+                // Render stars on the off-screen canvas
+                starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
                 stars.forEach((star) => {
-                    ctx.fillStyle = star.color;
-                    ctx.globalAlpha = star.opacity;
-                    ctx.fillRect(star.x, star.y, star.size, star.size);
-                    ctx.globalAlpha = 1;
+                    starCtx.fillStyle = star.color;
+                    starCtx.globalAlpha = star.opacity;
+                    starCtx.fillRect(star.x, star.y, star.size, star.size);
+                    starCtx.globalAlpha = 1;
                 });
+
+                // Draw the off-screen canvas on the main canvas
+                ctx.drawImage(starCanvas, 0, 0);
 
                 // Render objects
                 objects.forEach((object) => {
                     if (object.type === 'plane') {
                         // Render plane with tail and blinking red light
                         ctx.fillStyle = '#fff';
-                        ctx.fillRect(object.x, object.y, 50, 10);
-                        ctx.fillRect(object.x + 40, object.y - 5, 10, 5);
+                        ctx.fillRect(object.x, object.y, object.size, 10);
+                        ctx.fillRect(object.x + object.size - 10, object.y - 5, 10, 5);
 
                         ctx.fillStyle = object.blinkOn ? 'red' : '#fff';
                         ctx.beginPath();
-                        ctx.arc(object.x + 45, object.y, 2, 0, Math.PI * 2);
+                        ctx.arc(object.x + object.size - 5, object.y, 2, 0, Math.PI * 2);
                         ctx.fill();
 
                         object.blinkTimer += deltaTime;
@@ -262,13 +300,17 @@
                     } else if (object.type === 'satellite') {
                         // Render satellite
                         ctx.fillStyle = '#ccc';
-                        ctx.fillRect(object.x, object.y, 30, 30);
+                        ctx.fillRect(object.x, object.y, object.size, object.size / 2);
+                        ctx.fillRect(object.x + object.size / 4, object.y - object.size / 4, object.size / 2, object.size / 4);
                     }
                 });
             } else {
                 // Daytime scene
-                const skyColor = `rgb(${135 + 120 * transitionProgress}, ${206 + 49 * transitionProgress}, ${235 + 20 * transitionProgress})`;
-                ctx.fillStyle = skyColor;
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, `rgba(255, 165, 0, ${1 - transitionProgress})`);
+                gradient.addColorStop(0.5, `rgba(135, 206, 235, ${transitionProgress})`);
+                gradient.addColorStop(1, `rgba(135, 206, 235, 1)`);
+                ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 // Render cloud particles
