@@ -60,17 +60,15 @@
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
 
-        function getRandomColor() {
-            const r = getRandomInt(128, 255);
-            const g = getRandomInt(128, 255);
-            const b = getRandomInt(128, 255);
-            return `rgb(${r}, ${g}, ${b})`;
+        function getRandomStarColor() {
+            const colors = ['#ffffff', '#ffffcc', '#ccccff'];
+            return colors[getRandomInt(0, colors.length - 1)];
         }
 
         // Star creation functionality
         function createStar(x, y) {
             const size = getRandomInt(1, 3);
-            const color = getRandomColor();
+            const color = getRandomStarColor();
             const flickerInterval = getRandomInt(500, 2000);
 
             return {
@@ -88,8 +86,8 @@
         function createCloudParticle(x, y) {
             const size = getRandomInt(2, 6);
             const opacity = Math.random() * 0.8 + 0.2;
-            const speedX = (Math.random() - 0.5) * 0.5;
-            const speedY = Math.random() * 0.5;
+            const speedX = (Math.random() - 0.5) * 0.2;
+            const speedY = (Math.random() - 0.5) * 0.2;
 
             return {
                 x,
@@ -114,7 +112,7 @@
 
                 // Check star count and add objects
                 if (stars.length === 50) {
-                    objects.push({ type: 'plane', x: -100, y: getRandomInt(50, 200), direction: 'right' });
+                    objects.push({ type: 'plane', x: -100, y: getRandomInt(50, 200), direction: 'right', delay: 0, blinkTimer: 0, blinkOn: false });
                 } else if (stars.length === 200) {
                     objects.push({ type: 'satellite', x: -100, y: getRandomInt(50, 200), direction: 'right' });
                 } else if (stars.length === 500) {
@@ -148,13 +146,31 @@
                         if (object.x > canvas.width) {
                             object.x = -100;
                             object.y = getRandomInt(50, 200);
+                            object.direction = Math.random() < 0.5 ? 'right' : 'left';
+                            object.delay = getRandomInt(1000, 5000);
                         }
                     } else {
                         object.x -= deltaTime * speed;
                         if (object.x < -100) {
                             object.x = canvas.width;
                             object.y = getRandomInt(50, 200);
+                            object.direction = Math.random() < 0.5 ? 'right' : 'left';
+                            object.delay = getRandomInt(1000, 5000);
                         }
+                    }
+
+                    object.delay -= deltaTime;
+                    if (object.delay <= 0 && !objects.some((obj) => obj.type === 'plane' && obj !== object)) {
+                        const newPlane = {
+                            type: 'plane',
+                            x: object.direction === 'right' ? -100 : canvas.width,
+                            y: getRandomInt(50, 200),
+                            direction: object.direction,
+                            delay: getRandomInt(1000, 5000),
+                            blinkTimer: 0,
+                            blinkOn: false,
+                        };
+                        objects.push(newPlane);
                     }
                 } else if (object.type === 'satellite') {
                     object.x += deltaTime * 0.1;
@@ -166,7 +182,7 @@
             });
 
             if (isTransitioning) {
-                transitionProgress += deltaTime * 0.0005;
+                transitionProgress += deltaTime * 0.002;
                 if (transitionProgress >= 1) {
                     isTransitioning = false;
                     isNight = false;
@@ -181,6 +197,33 @@
                 if (particle.opacity <= 0) {
                     cloudParticles = cloudParticles.filter((p) => p !== particle);
                 }
+
+                cloudParticles.forEach((otherParticle) => {
+                    if (particle !== otherParticle) {
+                        const dx = particle.x - otherParticle.x;
+                        const dy = particle.y - otherParticle.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < 50) {
+                            const attractionForce = 0.0001;
+                            const forceX = dx * attractionForce;
+                            const forceY = dy * attractionForce;
+
+                            particle.speedX += forceX;
+                            particle.speedY += forceY;
+                            otherParticle.speedX -= forceX;
+                            otherParticle.speedY -= forceY;
+                        }
+
+                        if (distance < particle.size + otherParticle.size) {
+                            const newSize = Math.sqrt(particle.size * particle.size + otherParticle.size * otherParticle.size);
+                            particle.size = newSize;
+                            particle.x = (particle.x + otherParticle.x) / 2;
+                            particle.y = (particle.y + otherParticle.y) / 2;
+                            cloudParticles = cloudParticles.filter((p) => p !== otherParticle);
+                        }
+                    }
+                });
             });
         }
 
@@ -200,14 +243,21 @@
                 // Render objects
                 objects.forEach((object) => {
                     if (object.type === 'plane') {
-                        // Render plane with red blinking light particle
+                        // Render plane with tail and blinking red light
                         ctx.fillStyle = '#fff';
                         ctx.fillRect(object.x, object.y, 50, 10);
+                        ctx.fillRect(object.x + 40, object.y - 5, 10, 5);
 
-                        ctx.fillStyle = 'red';
+                        ctx.fillStyle = object.blinkOn ? 'red' : '#fff';
                         ctx.beginPath();
-                        ctx.arc(object.x + 25, object.y + 5, 2, 0, Math.PI * 2);
+                        ctx.arc(object.x + 45, object.y, 2, 0, Math.PI * 2);
                         ctx.fill();
+
+                        object.blinkTimer += deltaTime;
+                        if (object.blinkTimer >= 500) {
+                            object.blinkOn = !object.blinkOn;
+                            object.blinkTimer = 0;
+                        }
                     } else if (object.type === 'satellite') {
                         // Render satellite
                         ctx.fillStyle = '#ccc';
@@ -216,7 +266,7 @@
                 });
             } else {
                 // Daytime scene
-                const skyColor = `rgba(135, 206, 235, ${1 - transitionProgress})`;
+                const skyColor = `rgb(${135 + 120 * transitionProgress}, ${206 + 49 * transitionProgress}, ${235 + 20 * transitionProgress})`;
                 ctx.fillStyle = skyColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -231,7 +281,7 @@
 
             if (isTransitioning) {
                 // Render transition overlay
-                const overlayColor = `rgba(255, 165, 0, ${transitionProgress})`;
+                const overlayColor = `rgba(255, ${165 + 90 * transitionProgress}, ${transitionProgress * 255}, ${1 - transitionProgress})`;
                 ctx.fillStyle = overlayColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
